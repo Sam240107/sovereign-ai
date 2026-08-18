@@ -12,3 +12,8 @@ class PolicyDecision(BaseModel):
     decision: str
     reason: str
     risk_level: str
+
+class ApprovalRequest(BaseModel):
+    action: SovereignAction
+    policy_decision: PolicyDecision
+    status: str = "PENDING"
