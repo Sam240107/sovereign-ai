@@ -42,7 +42,7 @@ def parse_user_intent(user_message: str) -> SovereignAction:
 # ==========================================
 if __name__ == "__main__":
     print("Testing Gemini Intent Parser...")
-    sample_msg = "Pay ₹5000 to Anish for the design work."
+    sample_msg = "Pay ₹5000 to Roger for the design work."
     result = parse_user_intent(sample_msg)
     print("SOVEREIGN ACTION PARSED:")
     print(result)

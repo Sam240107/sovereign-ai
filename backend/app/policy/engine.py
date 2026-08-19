@@ -78,6 +78,6 @@ def resolve_approval_request(
 # ==========================================
 if __name__ == "__main__":
     print("Testing Policy Engine...")
-    test_action = SovereignAction(action="pay", recipient="Anish", amount=5000.0, currency="INR", reason="design work")
+    test_action = SovereignAction(action="pay", recipient="Roger", amount=5000.0, currency="INR", reason="design work")
     decision = evaluate_policy(test_action)
     print("POLICY DECISION:", decision)

@@ -1,448 +1,97 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  ShieldCheck, 
-  Terminal, 
-  Lock, 
-  Send, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Activity, 
-  Database, 
-  Zap, 
-  RefreshCw,
-  Cpu
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Activity, AlertTriangle, ArrowRight, Check, ChevronDown, ChevronUp,
+  ChevronsUpDown, CircleDollarSign, ClipboardCheck, Copy, Database,
+  Fingerprint, Gauge, Play, RefreshCw, Search, Send, ShieldAlert,
+  ShieldCheck, Terminal, UserRound, Vault, WalletCards,
 } from 'lucide-react';
 import TransactionTimeline from './components/TransactionTimeline';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import sovereignStarfield from './assets/sovereign-starfield.png';
 
-const API_BASE = "http://localhost:8000";
+const API = 'http://localhost:8000';
+const glass = 'rounded-2xl border border-slate-400/25 bg-slate-950/30 backdrop-blur-xl shadow-[0_0_32px_rgba(0,0,0,.38),inset_0_1px_0_rgba(255,255,255,.07)]';
+const field = 'w-full rounded-lg border border-slate-500/35 bg-slate-950/65 px-3 py-2.5 font-mono text-xs text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-300/70';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'ledger' | 'attack-lab'
-  const [inputMessage, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [currentResponse, setCurrentResponse] = useState(null);
-  const [pipelineSteps, setPipelineSteps] = useState([]);
-  
-  // Approval modal state
-  const [approverId, setApproverId] = useState('campus-admin-001');
-  
-  // Ledger & Attack Lab state
-  const [ledgerEntries, setLedgerEntries] = useState([]);
-  const [attackResult, setAttackResult] = useState(null);
-  const [attackLoading, setAttackLoading] = useState(false);
-
-  // Fetch audit ledger on tab switch
-  useEffect(() => {
-    if (activeTab === 'ledger') {
-      fetchLedger();
-    }
-  }, [activeTab]);
-
-  const fetchLedger = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/v1/audit/ledger`);
-      const data = await res.json();
-      setLedgerEntries(data);
-    } catch (err) {
-      console.error("Failed to fetch ledger:", err);
-    }
-  };
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!inputMessage.trim()) return;
-
-    setLoading(true);
-    setCurrentResponse(null);
-    setPipelineSteps([
-      { title: "1. Intent Extraction", description: "Parsing user command via Gemini AI...", status: "pending" }
-    ]);
-
-    try {
-      const res = await fetch(`${API_BASE}/v1/agent/plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: inputMessage })
-      });
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.detail || "Agent planning failed");
-
-      setCurrentResponse(data);
-      
-      // Build animated timeline steps
-      setPipelineSteps([
-        {
-          title: "1. Natural Language Intent Parsing",
-          description: `Extracted action: ${data.action.action} to ${data.action.recipient} for ₹${data.action.amount}`,
-          status: "completed",
-          meta: data.action
-        },
-        {
-          title: "2. Autonomous Policy Evaluation",
-          description: `Decision reached: ${data.policy.decision} (${data.policy.reason})`,
-          status: "completed",
-          meta: { risk: data.policy.risk_level }
-        },
-        {
-          title: "3. Human Approval & Guardian Audit",
-          description: data.approval_required ? "Paused: Requires human authorization sign-off." : "Within autonomous limits, bypassed human gating.",
-          status: data.approval_required ? "pending" : "completed"
-        },
-        {
-          title: "4. RazorpayX Test Gateway Execution",
-          description: data.execution ? `Dispatched payout successfully (ID: ${data.execution.transaction_id})` : "Awaiting approval sign-off...",
-          status: data.execution ? "completed" : "pending",
-          meta: data.execution ? { gateway: data.execution.gateway, id: data.execution.transaction_id } : null
-        }
-      ]);
-    } catch (err) {
-      alert(`Error: ${err.message}`);
-      setPipelineSteps([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResolveApproval = async (approved) => {
-    if (!currentResponse || !currentResponse.approval_request_id) return;
-
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/v1/approval/${currentResponse.approval_request_id}/resolve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver_id: approverId, approved })
-      });
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.detail || "Approval resolution failed");
-
-      // Update response with execution result
-      setCurrentResponse(prev => ({
-        ...prev,
-        execution: data.execution
-      }));
-
-      // Update timeline
-      setPipelineSteps(prev => [
-        prev[0],
-        prev[1],
-        {
-          title: "3. Human Approval & Guardian Audit",
-          description: approved ? `Approved by ${approverId} & passed Guardian Auditor.` : "Rejected by administrator.",
-          status: approved ? "completed" : "error",
-          meta: { approver: approverId, resolved_at: data.resolved_at }
-        },
-        {
-          title: "4. RazorpayX Test Gateway Execution",
-          description: data.execution ? `Successfully executed payout ID: ${data.execution.transaction_id}` : "Execution aborted due to rejection.",
-          status: data.execution ? "completed" : "pending",
-          meta: data.execution ? { gateway: data.execution.gateway, id: data.execution.transaction_id } : null
-        }
-      ]);
-    } catch (err) {
-      alert(`Approval error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runAttackSimulation = async (attackType) => {
-    setAttackLoading(true);
-    setAttackResult(null);
-    try {
-      const res = await fetch(`${API_BASE}/v1/attack-lab/${attackType}`, { method: 'POST' });
-      const data = await res.json();
-      setAttackResult(data);
-    } catch (err) {
-      alert(`Attack simulation error: ${err.message}`);
-    } finally {
-      setAttackLoading(false);
-    }
-  };
-
+function Robot({ small = false, mood = 'idle' }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Top Navigation Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <ShieldCheck className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-base tracking-tight text-white flex items-center gap-2">
-              SOVEREIGN <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">v0.3.0 SECURE</span>
-            </h1>
-            <p className="text-xs text-slate-400">AI Control Plane • Policy Firewall • RazorpayX Test Gateway</p>
-          </div>
-        </div>
-
-        {/* Tab Switcher */}
-        <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
-          <button 
-            onClick={() => setActiveTab('chat')}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'chat' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-          >
-            Agent Console
-          </button>
-          <button 
-            onClick={() => setActiveTab('ledger')}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'ledger' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-          >
-            Audit Ledger
-          </button>
-          <button 
-            onClick={() => setActiveTab('attack-lab')}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'attack-lab' ? 'bg-rose-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-          >
-            Attack Lab 🛡️
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-6 space-y-6">
-        
-        {activeTab === 'chat' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Left Column: Command & Input */}
-            <div className="md:col-span-1 space-y-5">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
-                <h2 className="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-indigo-400" />
-                  Intent Input
-                </h2>
-                
-                <form onSubmit={handleSendMessage} className="space-y-3">
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block font-mono">Natural Language Command</label>
-                    <textarea 
-                      rows="3"
-                      value={inputMessage}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder="e.g. Pay ₹500 to Anish for lunch or ₹5000 for design work"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono resize-none transition-colors"
-                    />
-                  </div>
-
-                  <button 
-                    type="submit" 
-                    disabled={loading}
-                    className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold tracking-wide flex items-center justify-center space-x-2 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
-                  >
-                    {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    <span>Evaluate & Execute</span>
-                  </button>
-                </form>
-
-                {/* Quick Prompts */}
-                <div className="pt-3 border-t border-slate-800 space-y-2">
-                  <span className="text-[11px] text-slate-400 font-mono block">Quick Demo Prompts:</span>
-                  <div className="flex flex-col gap-1.5">
-                    <button 
-                      onClick={() => setMessage("Pay ₹500 to Anish for lunch")} 
-                      className="text-left text-xs bg-slate-950/80 hover:bg-slate-800 p-2 rounded border border-slate-800/80 text-indigo-300 font-mono transition-colors"
-                    >
-                      ⚡ Pay ₹500 to Anish (ALLOW)
-                    </button>
-                    <button 
-                      onClick={() => setMessage("Pay ₹5000 to Anish for design work")} 
-                      className="text-left text-xs bg-slate-950/80 hover:bg-slate-800 p-2 rounded border border-slate-800/80 text-amber-300 font-mono transition-colors"
-                    >
-                      🔒 Pay ₹5000 to Anish (REQUIRE_APPROVAL)
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Approval Box if required */}
-              {currentResponse && currentResponse.approval_required && currentResponse.approval_request_id && (
-                <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-5 shadow-xl space-y-4 animate-fadeIn">
-                  <div className="flex items-center space-x-2 text-amber-400">
-                    <AlertTriangle className="w-5 h-5" />
-                    <h3 className="text-sm font-bold tracking-wide">Human Sign-Off Required</h3>
-                  </div>
-                  <p className="text-xs text-slate-300">
-                    This transaction exceeds autonomous spending thresholds and is paused for authorization.
-                  </p>
-                  
-                  <div>
-                    <label className="text-[11px] text-slate-400 block mb-1 font-mono">Approver ID / Role</label>
-                    <input 
-                      type="text" 
-                      value={approverId}
-                      onChange={(e) => setApproverId(e.target.value)}
-                      className="w-full bg-slate-950 border border-amber-500/30 rounded-lg p-2 text-xs text-white font-mono focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex space-x-2 pt-1">
-                    <button 
-                      onClick={() => handleResolveApproval(true)}
-                      disabled={loading}
-                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-all shadow"
-                    >
-                      Approve & Execute
-                    </button>
-                    <button 
-                      onClick={() => handleResolveApproval(false)}
-                      disabled={loading}
-                      className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition-all shadow"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: Execution Timeline & Live Gateway Status */}
-            <div className="md:col-span-2 space-y-5">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
-                <h2 className="text-sm font-semibold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-emerald-400" />
-                  Live Governance Pipeline
-                </h2>
-                
-                {pipelineSteps.length === 0 ? (
-                  <div className="text-center py-16 border border-dashed border-slate-800 rounded-lg">
-                    <Cpu className="w-8 h-8 text-slate-600 mx-auto mb-2 animate-pulse" />
-                    <p className="text-xs text-slate-500 font-mono">Submit a natural language command above to initiate Sovereign control flow.</p>
-                  </div>
-                ) : (
-                  <TransactionTimeline steps={pipelineSteps} />
-                )}
-              </div>
-
-              {/* RazorpayX Execution Receipt Card */}
-              {currentResponse && currentResponse.execution && (
-                <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-5 shadow-xl space-y-3">
-                  <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
-                    <div className="flex items-center space-x-2 text-emerald-400">
-                      <Zap className="w-5 h-5" />
-                      <h3 className="text-sm font-bold tracking-wide">RazorpayX Test Sandbox Payout Success</h3>
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">
-                      {currentResponse.execution.status}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                    <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
-                      <span className="text-slate-500 block">Transaction ID:</span>
-                      <span className="text-emerald-400 font-bold">{currentResponse.execution.transaction_id}</span>
-                    </div>
-                    <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
-                      <span className="text-slate-500 block">Gateway / Env:</span>
-                      <span className="text-indigo-300">{currentResponse.execution.gateway}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
-
-        {activeTab === 'ledger' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <div>
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                  <Database className="w-5 h-5 text-indigo-400" />
-                  Tamper-Evident Audit Ledger
-                </h2>
-                <p className="text-xs text-slate-400">Cryptographically hashed immutable receipts stored in SQLite.</p>
-              </div>
-              <button 
-                onClick={fetchLedger}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-mono rounded border border-slate-700 flex items-center space-x-1.5 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Refresh Ledger</span>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {ledgerEntries.length === 0 ? (
-                <p className="text-xs text-slate-500 font-mono text-center py-10">No ledger entries recorded yet.</p>
-              ) : (
-                ledgerEntries.map((entry, idx) => (
-                  <div key={idx} className="bg-slate-950 border border-slate-800/80 rounded-lg p-4 space-y-2 font-mono">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-indigo-400 font-bold">Receipt ID: {entry.receipt_id}</span>
-                      <span className="text-slate-500 text-[11px]">{entry.timestamp}</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-slate-300 bg-slate-900/50 p-2.5 rounded border border-slate-800">
-                      <div><span className="text-slate-500">Intent:</span> {entry.user_intent}</div>
-                      <div><span className="text-slate-500">Decision:</span> <span className="text-emerald-400">{entry.policy_decision}</span></div>
-                      <div><span className="text-slate-500">Hash:</span> <span className="text-amber-300 truncate block">{entry.receipt_hash}</span></div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'attack-lab' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-6">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-base font-semibold text-rose-400 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5" />
-                Attack Lab & Mutation Defense Simulator
-              </h2>
-              <p className="text-xs text-slate-400">Simulate malicious payload alterations and prompt overrides to prove Sovereign's cryptographic security boundaries.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button 
-                onClick={() => runAttackSimulation('amount-escalation')}
-                disabled={attackLoading}
-                className="bg-slate-950 border border-slate-800 hover:border-rose-500/50 rounded-xl p-4 text-left space-y-2 transition-all group"
-              >
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wide block group-hover:underline">1. Amount Escalation</span>
-                <p className="text-[11px] text-slate-400 font-mono">Approved for ₹5,000 → Agent tries to execute ₹50,000.</p>
-              </button>
-
-              <button 
-                onClick={() => runAttackSimulation('recipient-substitution')}
-                disabled={attackLoading}
-                className="bg-slate-950 border border-slate-800 hover:border-rose-500/50 rounded-xl p-4 text-left space-y-2 transition-all group"
-              >
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wide block group-hover:underline">2. Recipient Substitution</span>
-                <p className="text-[11px] text-slate-400 font-mono">Approved for Anish → Agent swaps to attacker wallet.</p>
-              </button>
-
-              <button 
-                onClick={() => runAttackSimulation('velocity-structuring')}
-                disabled={attackLoading}
-                className="bg-slate-950 border border-slate-800 hover:border-rose-500/50 rounded-xl p-4 text-left space-y-2 transition-all group"
-              >
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wide block group-hover:underline">3. Velocity Structuring</span>
-                <p className="text-[11px] text-slate-400 font-mono">Rapid micro-transactions designed to bypass limits.</p>
-              </button>
-            </div>
-
-            {attackResult && (
-              <div className="bg-rose-950/20 border border-rose-500/30 rounded-xl p-5 space-y-3 font-mono animate-fadeIn">
-                <div className="flex items-center justify-between border-b border-rose-500/20 pb-3">
-                  <span className="text-sm font-bold text-rose-400">🛡️ {attackResult.attack_name}</span>
-                  <span className="text-xs px-2.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
-                    {attackResult.status}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300">{attackResult.reason}</p>
-                <div className="bg-slate-950 p-3 rounded border border-slate-800 text-[11px] text-indigo-300 overflow-x-auto">
-                  {JSON.stringify(attackResult, null, 2)}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-      </main>
+    <div className={`robot ${small ? 'h-[90px] w-[90px]' : 'h-[190px] w-[190px]'} relative`} aria-label={`Sovereign Sentinel ${mood}`}>
+      <div className="absolute inset-[12%] rounded-full bg-cyan-300/20 blur-3xl" />
+      <DotLottieReact
+        src="https://lottie.host/d6b491b6-ebc9-420b-9af1-360571b53385/DfnY4GLZKD.lottie"
+        loop
+        autoplay
+        className="relative h-full w-full drop-shadow-[0_0_18px_rgba(103,232,249,.25)]"
+      />
     </div>
   );
+}
+
+function Pill({ tone = 'slate', children }) {
+  const styles = { slate: 'border-slate-500/40 bg-slate-800/60 text-slate-200', cyan: 'border-cyan-300/40 bg-cyan-400/10 text-cyan-100', emerald: 'border-emerald-300/40 bg-emerald-400/10 text-emerald-100', amber: 'border-amber-300/40 bg-amber-400/10 text-amber-100', rose: 'border-rose-300/40 bg-rose-400/10 text-rose-100' };
+  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-mono text-[9px] font-bold ${styles[tone]}`}><i className="h-1.5 w-1.5 rounded-full bg-current" />{children}</span>;
+}
+
+const getDecision = row => typeof row.policy_decision === 'string' ? row.policy_decision : row.policy_decision?.decision || 'UNKNOWN';
+function Decision({ value }) { const tone = value === 'ALLOW' ? 'emerald' : value === 'DENY' ? 'rose' : value === 'REQUIRE_APPROVAL' ? 'amber' : 'slate'; return <Pill tone={tone}>{value}</Pill>; }
+
+function Console({ state, command, setCommand, onSubmit, loading, response, approver, setApprover, onResolve, pipeline }) {
+  const text = state === 'idle' ? 'Standing by...' : state === 'processing' ? 'Evaluating policy...' : state === 'requires_approval' ? 'Awaiting sign-off...' : state === 'executed' ? 'Payout executed.' : 'Threat neutralized.';
+  return <section className="console-layout mx-auto grid max-w-[930px] gap-5 lg:grid-cols-[260px_380px_260px]">
+    <aside className="space-y-4">
+      <div className={`${glass} p-3`}>
+        <div className="flex items-center gap-2"><Robot small mood={state} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-1"><h2 className="text-xs font-bold text-white">Sovereign Sentinel</h2><Pill tone={state === 'executed' ? 'emerald' : state === 'requires_approval' ? 'amber' : 'slate'}>{state.toUpperCase()}</Pill></div><p className="mt-2 rounded-md border border-slate-600/35 bg-slate-950/50 px-2 py-2 font-mono text-[10px] text-slate-300">{text}</p></div></div>
+      </div>
+      <div className={`${glass} p-4`}>
+        <div className="flex items-start gap-2 text-slate-100"><ClipboardCheck className="mt-0.5 h-5 w-5 text-violet-200" /><h2 className="text-sm font-bold uppercase leading-tight">System Manual &<br />How It Works</h2></div>
+        <p className="mt-5 text-[10px] font-bold uppercase text-slate-300">Understanding Sovereign's Control Flow</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-300">Sovereign uses natural language processing to interpret and execute security commands.</p>
+        <ol className="mt-3 space-y-1.5 pl-4 text-[11px] leading-[1.28] text-slate-200">
+          <li><b>Intent Processing:</b> The console extracts your command.</li>
+          <li><b>AI Evaluation:</b> Risk and policy constraints are checked.</li>
+          <li><b>Policy Enforcement:</b> ALLOW, DENY, or REQUIRE APPROVAL.</li>
+          <li><b>Execution:</b> Validated intents pass to the gateway.</li>
+        </ol>
+      </div>
+    </aside>
+    <div className="flex flex-col items-center pt-1">
+      <div className="relative grid h-[180px] place-items-center"><div className="absolute h-36 w-36 rounded-full bg-cyan-300/10 blur-2xl" /><Robot mood={state} /></div>
+      <div className={`${glass} w-full p-4`}>
+        <div className="mb-2 flex items-center gap-2"><div className="rounded-lg border border-violet-300/30 bg-violet-400/10 p-2"><Terminal className="h-4 w-4 text-violet-200" /></div><div><h2 className="text-sm font-bold uppercase">System Interaction Console</h2><p className="text-center text-[10px] text-slate-400">Natural Language Command</p></div></div>
+        <form onSubmit={onSubmit} className="space-y-3"><textarea value={command} onChange={e => setCommand(e.target.value)} rows="2" className={`${field} resize-none`} placeholder="e.g. Pay ₹500 to Roger for lunch or ₹5000 for design work" /><button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-300 to-violet-400 py-2.5 text-xs font-bold text-slate-950 shadow-[0_0_20px_rgba(34,211,238,.22)]">{loading ? <Activity className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{loading ? 'Evaluating...' : 'Evaluate & Execute'}</button></form>
+        <div className="mt-2 space-y-2"><button onClick={() => setCommand('Pay ₹500 to Roger for lunch')} className="w-full rounded-lg border border-emerald-300/40 bg-emerald-400/[.06] px-3 py-2 text-left font-mono text-[10px] text-emerald-100">⚡ Pay ₹500 to Roger for lunch <b>(ALLOW)</b></button><button onClick={() => setCommand('Pay ₹5000 to Roger for equipment')} className="w-full rounded-lg border border-amber-300/40 bg-amber-400/[.06] px-3 py-2 text-left font-mono text-[10px] text-amber-100">🔒 Pay ₹5000 to a Roger <b>(REQUIRE_APPROVAL)</b></button></div>
+      </div>
+      {response?.approval_required && <div className="mt-3 w-full rounded-xl border border-amber-300/40 bg-amber-400/10 p-3"><p className="text-xs font-bold text-amber-100">Human authorization required</p><input className={`${field} mt-2 py-2`} value={approver} onChange={e => setApprover(e.target.value)} /><div className="mt-2 flex gap-2"><button onClick={() => onResolve(true)} className="flex-1 rounded-md bg-emerald-300 py-2 text-xs font-bold text-slate-950">Approve</button><button onClick={() => onResolve(false)} className="flex-1 rounded-md border border-rose-300/40 py-2 text-xs text-rose-100">Reject</button></div></div>}
+    </div>
+    <aside className={`${glass} min-h-[310px] p-4`}>
+      <div className="mb-4 flex items-center gap-2"><Activity className="h-5 w-5 text-cyan-300" /><div><h2 className="text-xs font-bold uppercase">Live Governance Pipeline</h2><p className="text-[9px] text-slate-400">Real-time policy trace</p></div></div>
+      {pipeline.length ? <TransactionTimeline steps={pipeline} isExecuting={loading} sentinelState={state} /> : <div className="grid min-h-[245px] place-items-center rounded-2xl border border-dashed border-slate-600/40 px-8 text-center"><div><ShieldCheck className="mx-auto h-10 w-10 text-slate-500" /><p className="mt-5 font-mono text-[11px] leading-relaxed text-slate-400">Submit a natural language command above to initiate Sovereign control flow.</p></div></div>}
+    </aside>
+  </section>;
+}
+
+function Ledger({ rows, allRows, query, setQuery, filter, setFilter, sort, onSort, loading, onReload, onVerify, integrity }) {
+  const columns = [['receipt_id', 'Receipt ID'], ['timestamp', 'Timestamp'], ['user_intent', 'User Intent'], ['policy_decision', 'Policy Decision'], ['receipt_hash', 'Cryptographic Hash']];
+  return <section className="mx-auto max-w-[1120px]"><div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div className="flex items-center gap-3"><div className="rounded-2xl border border-violet-300/30 bg-violet-400/10 p-4"><Database className="h-8 w-8 text-violet-200" /></div><div><h2 className="text-2xl font-bold">Tamper-Evident Audit Ledger</h2><p className="text-sm text-slate-400">Cryptographically hashed immutable receipts stored in SQLite.</p></div></div><div className="flex gap-3"><Metric label="Total Receipts" value={allRows.length} /><Metric label="Unresolved" value={allRows.filter(x => getDecision(x) !== 'ALLOW').length} tone="rose" /><Metric label="Integrity" value={integrity?.valid ? 'VERIFIED' : 'READY'} tone="violet" /></div></div><div className={`${glass} p-4`}><div className="flex flex-wrap gap-2"><div className="relative min-w-[220px] flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" /><input className={`${field} pl-9`} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search receipts, intents..." /></div><select className={field} value={filter} onChange={e => setFilter(e.target.value)}><option value="ALL">All decisions</option><option>ALLOW</option><option>DENY</option><option>REQUIRE_APPROVAL</option><option>UNKNOWN</option></select><button onClick={onVerify} className="rounded-lg border border-violet-300/40 bg-violet-400/10 px-3 text-xs font-bold text-violet-100">Verify Full Ledger Integrity</button><button onClick={onReload} className="rounded-lg border border-slate-500/40 px-3"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button></div><div className="mt-4 overflow-x-auto rounded-xl border border-slate-500/25"><table className="w-full min-w-[970px] text-left"><thead className="bg-slate-900/75"><tr>{columns.map(([key, title]) => <th key={key} className="px-4 py-3"><button className="flex items-center gap-1 font-mono text-[10px] uppercase text-slate-400" onClick={() => onSort(key)}>{title}{sort.field === key ? sort.dir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" /> : <ChevronsUpDown className="h-3 w-3 opacity-40" />}</button></th>)}<th className="px-4 py-3 font-mono text-[10px] uppercase text-slate-400">Actions</th></tr></thead><tbody>{rows.map((row, i) => <tr key={row.receipt_id || i} className="border-t border-slate-700/30 odd:bg-slate-950/45"><td className="max-w-40 truncate px-4 py-3 font-mono text-xs text-cyan-200">{row.receipt_id}</td><td className="px-4 py-3 font-mono text-[10px] text-slate-400">{row.timestamp}</td><td className="max-w-56 truncate px-4 py-3 text-xs">{row.user_intent}</td><td className="px-4 py-3"><Decision value={getDecision(row)} /></td><td className="px-4 py-3"><span className="inline-flex items-center gap-1 rounded border border-emerald-300/25 bg-slate-950/60 px-2 py-1 font-mono text-[10px] text-emerald-100"><Fingerprint className="h-3 w-3" />{row.receipt_hash?.slice(0, 8)}…{row.receipt_hash?.slice(-6)}</span></td><td className="px-4 py-3"><button onClick={() => alert(JSON.stringify(row, null, 2))} className="rounded border border-slate-500/40 px-2 py-1 text-[10px]">View JSON Receipt</button></td></tr>)}{!rows.length && <tr><td colSpan="6" className="py-14 text-center font-mono text-xs text-slate-500">{loading ? 'Loading ledger...' : 'No receipts found.'}</td></tr>}</tbody></table></div></div></section>;
+}
+
+function Metric({ label, value, tone = 'cyan' }) { const t = { cyan: 'border-cyan-300/30 text-cyan-100', rose: 'border-rose-300/30 text-rose-100', violet: 'border-violet-300/30 text-violet-100' }[tone]; return <div className={`rounded-xl border bg-slate-900/50 px-3 py-2 ${t}`}><p className="text-[9px] uppercase text-slate-400">{label}</p><b className="font-mono text-lg">{value}</b></div>; }
+
+function AttackLab({ run, running, result }) {
+  const cards = [{ type: 'amount-escalation', icon: CircleDollarSign, title: 'Amount Escalation', text: 'Approved for ₹5,000 → Agent tries to execute ₹50,000.' }, { type: 'recipient-substitution', icon: WalletCards, title: 'Recipient Substitution', text: 'Approved for Roger → Agent swaps to attacker wallet.' }, { type: 'velocity-structuring', icon: Gauge, title: 'Velocity Structuring', text: 'Rapid micro-transactions designed to bypass limits.' }];
+  return <section className="mx-auto max-w-[1040px]"><div className="grid grid-cols-2 gap-3"><Metric label="Simulations Run" value="1,245" /><Metric label="Vulnerabilities Identified" value="18" tone="rose" /></div><div className="my-7 text-center"><h2 className="text-3xl font-bold">Attack Lab & Mutation Defense Simulator</h2><p className="mt-2 text-sm text-slate-400">Simulate malicious payload alterations and prompt overrides to prove Sovereign's security boundaries.</p></div><div className="grid gap-4 md:grid-cols-3">{cards.map(card => { const Icon = card.icon; return <article key={card.type} className={`${glass} p-4`}><div className="flex items-center gap-2"><div className="rounded-xl border border-rose-300/35 bg-rose-400/10 p-2 text-rose-200"><Icon className="h-5 w-5" /></div><h3 className="font-bold uppercase">{card.title}</h3></div><p className="mt-3 min-h-10 text-xs text-slate-300">{card.text}</p><div className="my-4 grid h-32 place-items-center rounded-xl border border-rose-300/15 bg-slate-950/45"><AlertTriangle className="h-11 w-11 text-rose-300/70" /></div><div className="flex gap-2"><button className="flex-1 rounded-lg border border-slate-500/40 py-2 text-xs">Configure Values</button><button disabled={!!running} onClick={() => run(card.type)} className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-rose-300/50 bg-rose-400/15 py-2 text-xs font-bold text-rose-100">{running === card.type ? <Activity className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}Launch</button></div><div className="mt-3 text-center"><Pill tone={running === card.type ? 'amber' : 'emerald'}>{running === card.type ? 'RUNNING' : 'IDLE - READY TO RUN'}</Pill></div></article>; })}</div>{result && <div className="mt-4 rounded-xl border border-rose-300/35 bg-rose-400/10 p-4"><b className="text-rose-100">{result.attack_name}</b><p className="mt-1 text-sm text-slate-300">{result.reason}</p></div>}</section>;
+}
+
+export default function App() {
+  const [tab, setTab] = useState('console'); const [command, setCommand] = useState(''); const [loading, setLoading] = useState(false); const [response, setResponse] = useState(null); const [pipeline, setPipeline] = useState([]); const [approver, setApprover] = useState('campus-admin-001');
+  const [ledger, setLedger] = useState([]); const [query, setQuery] = useState(''); const [filter, setFilter] = useState('ALL'); const [sort, setSort] = useState({ field: 'timestamp', dir: 'desc' }); const [ledgerLoading, setLedgerLoading] = useState(false); const [integrity, setIntegrity] = useState(null); const [running, setRunning] = useState(''); const [attack, setAttack] = useState(null);
+  const state = response?.execution ? 'executed' : response?.approval_required ? 'requires_approval' : loading ? 'processing' : attack?.status?.toLowerCase().includes('block') ? 'blocked' : 'idle';
+  const fetchLedger = useCallback(async () => { setLedgerLoading(true); try { const r = await fetch(`${API}/v1/audit/ledger`); if (!r.ok) throw Error(); setLedger(await r.json()); } catch { console.error('Could not fetch the ledger'); } finally { setLedgerLoading(false); } }, []);
+  useEffect(() => { if (tab === 'ledger') fetchLedger(); }, [tab, fetchLedger]);
+  const rows = useMemo(() => ledger.filter(r => (filter === 'ALL' || getDecision(r) === filter) && (!query || [r.receipt_id, r.timestamp, r.user_intent, r.receipt_hash].join(' ').toLowerCase().includes(query.toLowerCase()))).sort((a, b) => String(sort.field === 'policy_decision' ? getDecision(a) : a[sort.field] || '').localeCompare(String(sort.field === 'policy_decision' ? getDecision(b) : b[sort.field] || '')) * (sort.dir === 'asc' ? 1 : -1)), [ledger, filter, query, sort]);
+  const plan = async e => { e.preventDefault(); if (!command.trim()) return; setLoading(true); setResponse(null); setPipeline([{ title: 'Intent extraction', description: 'Parsing the natural-language command.', status: 'pending' }]); try { const r = await fetch(`${API}/v1/agent/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: command }) }); const d = await r.json(); if (!r.ok) throw Error(d.detail); setResponse(d); setPipeline([{ title: 'Natural language intent parsing', description: `Extracted ${d.action.action} for ${d.action.recipient} · ₹${d.action.amount}`, status: 'completed' }, { title: 'Autonomous policy evaluation', description: `${d.policy.decision}: ${d.policy.reason}`, status: 'completed' }, { title: 'Human approval & guardian audit', description: d.approval_required ? 'Awaiting authorized human sign-off.' : 'Autonomous limit verified.', status: d.approval_required ? 'pending' : 'completed' }, { title: 'RazorpayX sandbox execution', description: d.execution ? `Payout dispatched · ${d.execution.transaction_id}` : 'Awaiting approval.', status: d.execution ? 'completed' : 'pending' }]); } catch (err) { alert(`Error: ${err.message}`); setPipeline([]); } finally { setLoading(false); } };
+  const resolve = async approved => { if (!response?.approval_request_id) return; setLoading(true); try { const r = await fetch(`${API}/v1/approval/${response.approval_request_id}/resolve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approver_id: approver, approved }) }); const d = await r.json(); if (!r.ok) throw Error(d.detail); setResponse(p => ({ ...p, approval_required: false, execution: d.execution })); setPipeline(p => p.map((s, i) => i === 2 ? { ...s, status: approved ? 'completed' : 'error', description: approved ? `Approved by ${approver}.` : 'Rejected by administrator.' } : i === 3 ? { ...s, status: d.execution ? 'completed' : 'error', description: d.execution ? `Payout executed · ${d.execution.transaction_id}` : 'Execution aborted.' } : s)); } catch (err) { alert(`Approval error: ${err.message}`); } finally { setLoading(false); } };
+  const run = async type => { setRunning(type); setAttack(null); try { const r = await fetch(`${API}/v1/attack-lab/${type}`, { method: 'POST' }); const d = await r.json(); if (!r.ok) throw Error(d.detail); setAttack(d); } catch (err) { alert(`Simulation error: ${err.message}`); } finally { setRunning(''); } };
+  const verify = async () => { try { const r = await fetch(`${API}/v1/audit/verify`); setIntegrity(await r.json()); } catch { setIntegrity({ valid: false }); } };
+  return <div className="min-h-screen overflow-hidden bg-slate-950 text-slate-100"><div className="pointer-events-none fixed inset-0 overflow-hidden"><div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30" style={{ backgroundImage: `url(${sovereignStarfield})` }} /><div className="absolute inset-0 bg-slate-950/35" /><div className="ambient orb-one" /><div className="ambient orb-two" /><div className="ambient orb-three" /></div><header className="relative z-10 pt-9 text-center"><div className="inline-flex items-center gap-3"><div className="grid h-12 w-12 place-items-center rounded-2xl border border-cyan-200/40 bg-gradient-to-br from-cyan-300 to-violet-400 text-slate-950"><ShieldCheck className="h-6 w-6" /></div><div className="text-left"><div className="flex items-center gap-2"><h1 className="font-serif text-4xl tracking-[.1em]">SOVEREIGN</h1><Pill tone="cyan">v0.3.0 SECURE</Pill></div><p className="mt-1 text-[11px] text-slate-300">AI Control Plane · Policy Firewall · RazorpayX Test Gateway</p></div></div><nav className="mx-auto mt-3 flex w-fit rounded-xl border border-slate-400/25 bg-slate-950/35 p-1">{[['console', 'Agent Console'], ['ledger', 'Audit Ledger'], ['attack', 'Attack Lab']].map(([id, name]) => <button key={id} onClick={() => setTab(id)} className={`rounded-lg px-4 py-2 text-xs font-semibold ${tab === id ? id === 'attack' ? 'bg-rose-400/80 text-white shadow-[0_0_20px_rgba(251,113,133,.35)]' : 'bg-slate-700/65 text-white shadow-[0_0_18px_rgba(34,211,238,.2)] ring-1 ring-cyan-200/45' : 'text-slate-300 hover:text-white'}`}>{name}{id === 'attack' && <ShieldAlert className="ml-1 inline h-3 w-3" />}</button>)}</nav></header><main className="relative z-10 px-5 pb-10 pt-5">{tab === 'console' && <Console state={state} command={command} setCommand={setCommand} onSubmit={plan} loading={loading} response={response} approver={approver} setApprover={setApprover} onResolve={resolve} pipeline={pipeline} />}{tab === 'ledger' && <Ledger rows={rows} allRows={ledger} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} sort={sort} onSort={field => setSort(p => ({ field, dir: p.field === field && p.dir === 'asc' ? 'desc' : 'asc' }))} loading={ledgerLoading} onReload={fetchLedger} onVerify={verify} integrity={integrity} />}{tab === 'attack' && <AttackLab run={run} running={running} result={attack} />}</main></div>;
 }

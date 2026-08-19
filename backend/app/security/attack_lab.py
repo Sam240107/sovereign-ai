@@ -26,11 +26,11 @@ class AttackSimulator:
         Approved for ₹5,000 -> Agent attempts to execute ₹50,000.
         Expected Result: HASH MISMATCH -> BLOCKED
         """
-        original_action = SovereignAction(action="pay", recipient="Anish", amount=5000.0, currency="INR", reason="design work")
+        original_action = SovereignAction(action="pay", recipient="Roger", amount=5000.0, currency="INR", reason="design work")
         original_hash = compute_action_hash(original_action)
         
         # Tampered attempt by compromised agent
-        tampered_action = SovereignAction(action="pay", recipient="Anish", amount=50000.0, currency="INR", reason="design work")
+        tampered_action = SovereignAction(action="pay", recipient="Roger", amount=50000.0, currency="INR", reason="design work")
         tampered_hash = compute_action_hash(tampered_action)
         
         is_mutated = original_hash != tampered_hash
@@ -50,10 +50,10 @@ class AttackSimulator:
     def simulate_recipient_substitution() -> Dict[str, Any]:
         """
         Attack B: Recipient Substitution
-        Approved for Anish -> Agent attempts to pay Attacker.
+        Approved for Roger -> Agent attempts to pay Attacker.
         Expected Result: HASH MISMATCH -> BLOCKED
         """
-        original_action = SovereignAction(action="pay", recipient="Anish", amount=5000.0, currency="INR", reason="fee")
+        original_action = SovereignAction(action="pay", recipient="Roger", amount=5000.0, currency="INR", reason="fee")
         original_hash = compute_action_hash(original_action)
         
         tampered_action = SovereignAction(action="pay", recipient="Attacker_Wallet_99", amount=5000.0, currency="INR", reason="fee")
@@ -61,7 +61,7 @@ class AttackSimulator:
         
         return {
             "attack_name": "Recipient Substitution",
-            "approved_recipient": "Anish",
+            "approved_recipient": "Roger",
             "attempted_recipient": "Attacker_Wallet_99",
             "approved_hash": original_hash,
             "attempted_hash": tampered_hash,

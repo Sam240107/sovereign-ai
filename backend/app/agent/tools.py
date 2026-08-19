@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     # Scenario 1: ALLOW Action (e.g., ₹500 payment via RazorpayX Test)
     print("Test 1: ALLOW Action (₹500)")
-    action_small = SovereignAction(action="pay", recipient="Anish", amount=500.0, currency="INR", reason="lunch")
+    action_small = SovereignAction(action="pay", recipient="Roger", amount=500.0, currency="INR", reason="lunch")
     policy_allow = PolicyDecision(decision="ALLOW", reason="Within autonomous limit", risk_level="LOW")
     
     try:
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     # Scenario 2: REQUIRE_APPROVAL Action WITHOUT Approval - Should Block
     print("Test 2: REQUIRE_APPROVAL Action WITHOUT Approval (₹5000) - Should Block")
-    action_large = SovereignAction(action="pay", recipient="Anish", amount=5000.0, currency="INR", reason="design work")
+    action_large = SovereignAction(action="pay", recipient="Roger", amount=5000.0, currency="INR", reason="design work")
     policy_approval = PolicyDecision(decision="REQUIRE_APPROVAL", reason="Exceeds autonomous limit", risk_level="MEDIUM")
     
     try:
